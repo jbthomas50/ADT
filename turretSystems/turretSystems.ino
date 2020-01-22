@@ -9,7 +9,7 @@ const int stepsPerRevolution = 2048;
 // communication interrupt
 #define COMMUNICATION_INTERRUPT 2
 // interrupt to calibrate the turret angle
-#define CALIBRATION_INTERRUPT 3
+#define FIRING_PIN 3
 // Z axis motor
 #define Z_IN1 4
 #define Z_IN2 5
@@ -21,16 +21,18 @@ const int stepsPerRevolution = 2048;
 #define XY_IN3 10
 #define XY_IN4 11
 // firing pin
-#define FIRING_PIN 12
+#define HORIZONTAL_CALIBRATION 12
+#define VERTICAL_CALIBRATION 13
 
 const float DEG_PER_STEP = 360 / stepsPerRevolution;
 const float STEP_PER_DEG = stepsPerRevolution / 360;
 // Create stepper objects, note the pin order:
-Stepper XYStepper = Stepper(stepsPerRevolution, XY_IN1, XY_IN3, XY_IN2, XY_IN4);
-Stepper ZStepper = Stepper(stepsPerRevolution, Z_IN1, Z_IN3, Z_IN2, Z_IN4);
+Stepper HorizontalStepper = Stepper(stepsPerRevolution, XY_IN1, XY_IN3, XY_IN2, XY_IN4);
+Stepper VerticalStepper = Stepper(stepsPerRevolution, Z_IN1, Z_IN3, Z_IN2, Z_IN4);
 
 int xCenter;
 int yCenter;
+// Use this to get serial input byte by byte and use as a float
 union byteChipper
 {
   float angle;
@@ -45,15 +47,24 @@ struct gunCoords
 
 gunCoords previousCoords;
 
-// ISRs
+// ISR to start aiming/firing process
 void wakeupISR(void* param)
 {
   sleep_disable();
 }
 
-void calibratingISR(void* param)
+// Initial calibration
+void calibrate()
 {
+  while (!digitalRead(HORIZONTAL_CALIBRATION))
+  {
+    HorizontalStepper.step(1);
+  }
   previousCoords.horizontal.angle = 0;
+  while(!digitalRead(VERTICAL_CALIBRATION))
+  {
+    VerticalStepper.step(1);
+  }
   previousCoords.vertical.angle = 0;
 }
 
@@ -68,8 +79,8 @@ void aim(gunCoords coords)
   int horizontalSteps = STEP_PER_DEG * horizontalDegrees;
   int verticalSteps = STEP_PER_DEG * verticalDegrees;
   // take the steps
-  XYStepper.step(horizontalSteps);
-  ZStepper.step(verticalSteps);
+  HorizontalStepper.step(horizontalSteps);
+  VerticalStepper.step(verticalSteps);
 }
 
 void fireOrIntimidate(bool fire)
@@ -107,19 +118,22 @@ void setup()
   // Begin Serial communication at a baud rate of 9600:
   Serial.begin(9600);
   // Set the speed to 15 rpm:
-  XYStepper.setSpeed(15);
-  ZStepper.setSpeed(15);
+  HorizontalStepper.setSpeed(15);
+  VerticalStepper.setSpeed(15);
 
   // output pins
   pinMode(FIRING_PIN, OUTPUT);
 
   // input pins
   pinMode(COMMUNICATION_INTERRUPT, INPUT_PULLUP);
-  pinMode(CALIBRATION_INTERRUPT, INPUT_PULLUP);
+  pinMode(HORIZONTAL_CALIBRATION, INPUT);
+  pinMode(VERTICAL_CALIBRATION, INPUT);
 
   // interrupts
   attachInterrupt(digitalPinToInterrupt(COMMUNICATION_INTERRUPT), wakeupISR, RISING);
-  attachInterrupt(digitalPinToInterrupt(CALIBRATION_INTERRUPT), calibratingISR, RISING);
+
+  // calibrate the gun angles
+  calibrate();
 }
 
 /********************************************************************************/
