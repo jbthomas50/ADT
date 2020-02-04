@@ -111,14 +111,14 @@ void fireOrIntimidate(bool fire, int numDarts = 1)
     for (int i = 0; i < numDarts; i++)
     {
       // move the firing pin forward
-      for (pos = 0; pos <= 180; pos += 10) {
+      for (pos; pos <= 180; pos += 10) {
         firingPin.write(pos);
-        delay(15);
+        delay(50);
       }
       // move firing pin back
-      for (pos = 180; pos >= 0; pos -= 10) {
+      for (pos; pos >= 0; pos -= 10) {
         firingPin.write(pos);
-        delay(15); 
+        delay(50); 
       }
       firingPin.write(0);
       delay(200);
