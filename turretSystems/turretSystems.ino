@@ -7,31 +7,46 @@
 #include <avr/sleep.h>
 // Define number of steps per rotation:
 const int stepsPerRevolution = 2048;
+
+/*********** PINS *************/
 // UART
-#define RX 0
-#define TX 1
+const int RX = 0;
+const int TX = 1;
 // communication interrupt
-#define COMMUNICATION_INTERRUPT 2
-// interrupt to calibrate the turret angle
-#define FIRING_PIN 3
+const int COMMUNICATION_INTERRUPT = 2;
+// save pin 3 for possible future interrupt
+const int FIRE_FEEDBACK = 3; // if we choose to detect a misfire
 // Z axis motor
-#define Z_IN1 4
-#define Z_IN2 5
-#define Z_IN3 6
-#define Z_IN4 7
-// XY axis motor
-#define XY_IN1 8
-#define XY_IN2 9
-#define XY_IN3 10
-#define XY_IN4 11
+const int Z_IN1 = 4;
+const int Z_IN2 = 5;
+const int Z_IN3 = 6;
+const int Z_IN4 = 7;
 // firing pin
-#define HORIZONTAL_CALIBRATION 12
-#define VERTICAL_CALIBRATION 13
+const int FIRING_PIN = 8;
+// enable for the motor to move the mag holder
+const int MOTOR_ENABLE = 9;
+// XY axis motor
+const int XY_IN1 = 10;
+const int XY_IN2 = 11;
+const int XY_IN3 = 12;
+const int XY_IN4 = 13;
 
-#define SPIN_UP A0
+// firing motor. Only need one pin since it only goes one way
+const int SPIN_UP = A0;
+// motor control for the mag holder. Need more pins because this one spins two ways
+const int MAG_MOVER = A1;
+const int MAG_RESET = A2;
+// signals when to stop moving the mag holder
+const int MAG_POSITION = A3;
+const int HORIZONTAL_CALIBRATION = A4;
+const int VERTICAL_CALIBRATION = A5;
 
-const float GEAR_RATIO = 360.0 / 4.0; // four full rotations for a 360 degree turn
+/***************** END OF PINS*********************/
+
+const float GEAR_RATIO = 360.0 * 4.0; // four full rotations for a 360 degree turn
 const float STEP_PER_DEG = stepsPerRevolution / GEAR_RATIO;
+const int DARTS_PER_MAG = 12;
+const int NUM_MAGS = 4;
 // Create stepper objects, note the pin order: 1 3 2 4
 Stepper HorizontalStepper = Stepper(stepsPerRevolution, XY_IN1, XY_IN3, XY_IN2, XY_IN4);
 Stepper VerticalStepper = Stepper(stepsPerRevolution, Z_IN1, Z_IN3, Z_IN2, Z_IN4);
@@ -40,7 +55,11 @@ Servo firingPin;
 int xCenter;
 int yCenter;
 
+int numDartsFired;
+int numMagsUsed;
+
 bool spinning;
+volatile bool fired;
 
 struct serializedGunCoords
 {
@@ -56,10 +75,18 @@ struct gunCoords
 
 /*******************************************
  * ISR to start aiming/firing process
-********************************************/
+ ********************************************/
 void wakeupISR(void* param)
 {
   sleep_disable();
+}
+
+/********************************************
+ * ISR to ensure dart firing.
+ ********************************************/
+void dartFired(void* param)
+{
+  fired = true;
 }
 
 /********************************************
@@ -77,7 +104,6 @@ void calibrate()
     VerticalStepper.step(1);
   }
   previousCoords.vertical = 0.0;
-  Serial.println("calibrating");
 }
 
 /*************************************************
@@ -85,8 +111,6 @@ void calibrate()
 **************************************************/
 void aim(gunCoords coords)
 {
-  Serial.println("Aiming");
-  
   // determine how many degrees away we are
   float horizontalDegrees = coords.horizontal - previousCoords.horizontal;
   float verticalDegrees = coords.vertical - previousCoords.vertical;
@@ -106,10 +130,10 @@ void fireOrIntimidate(bool fire, int numDarts = 1)
   
   if (fire)
   {
-    Serial.println("Firing");
     int pos = 0;
     for (int i = 0; i < numDarts; i++)
     {
+      fired = false;
       // move the firing pin forward
       for (pos; pos <= 180; pos += 10) {
         firingPin.write(pos);
@@ -122,15 +146,65 @@ void fireOrIntimidate(bool fire, int numDarts = 1)
       }
       firingPin.write(0);
       delay(200);
+      
+      if (fired == false)
+      {
+        // set i back one to retry firing
+        //i--;
+      }
+      else
+      {
+        numDartsFired++;
+      }
     }
-    
+  }
+}
+
+/***************************************************
+ * Move the mag. Detect whether at the end or not.
+ **************************************************/
+void moveMagHolder()
+{
+  numMagsUsed++;
+  if (numMagsUsed == NUM_MAGS)
+  {
+    // We've used all the mags so we have to reset
+    digitalWrite(MAG_MOVER, LOW);
+    digitalWrite(MAG_RESET, HIGH);
+    digitalWrite(MOTOR_ENABLE, HIGH);
+    int mag = 1;
+    while (mag != NUM_MAGS)
+    {
+      if (!digitalRead(MAG_POSITION))
+      {
+        mag++;
+        while(!digitalRead(MAG_POSITION) && mag != NUM_MAGS)
+        {
+          // wait to pass current mag  
+        }
+      }
+    }
+    digitalWrite(MOTOR_ENABLE, HIGH);
+    numMagsUsed = 0;
   }
   else
   {
-    Serial.println("Intimidating");
+    // Move to the next mag
+    digitalWrite(MAG_MOVER, LOW);
+    digitalWrite(MAG_RESET, HIGH);
+    digitalWrite(MOTOR_ENABLE, HIGH);
+    while (!digitalRead(MAG_POSITION))
+    {
+      // make sure we get all the way past the current mag
+    }
+    while (digitalRead(MAG_POSITION))
+    {
+      // get to the next mag
+    }
+    digitalWrite(MOTOR_ENABLE, HIGH);
   }
-
 }
+
 
 /**********************************************
  * Used for spinning up the firing motor
@@ -216,17 +290,30 @@ void setup()
 
   // output pins
   pinMode(SPIN_UP, OUTPUT);
+  pinMode(MAG_MOVER, OUTPUT);
+  pinMode(MAG_RESET, OUTPUT);
+  pinMode(MOTOR_ENABLE, OUTPUT);
+
+  // initialize the outputs just to be sure
   digitalWrite(SPIN_UP, LOW);
+  digitalWrite(MAG_MOVER, LOW);
+  digitalWrite(MAG_RESET, LOW);
+  digitalWrite(MOTOR_ENABLE, LOW);
 
   // input pins
   pinMode(COMMUNICATION_INTERRUPT, INPUT_PULLUP);
   pinMode(HORIZONTAL_CALIBRATION, INPUT);
   pinMode(VERTICAL_CALIBRATION, INPUT);
+  pinMode(FIRE_FEEDBACK, INPUT);
+  pinMode(MAG_POSITION, INPUT_PULLUP);
 
   // interrupts
   attachInterrupt(digitalPinToInterrupt(COMMUNICATION_INTERRUPT), wakeupISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(FIRE_FEEDBACK), dartFired, RISING);
 
   spinning = false;
+  numDartsFired = 0;
+  numMagsUsed = 0;
 
   // calibrate the gun angles
   calibrate();
@@ -258,4 +345,10 @@ void loop()
     toggleSpinUp();    
   }
   previousCoords = coords;
+  
+  // change mag if needed
+  if (numDartsFired == DARTS_PER_MAG)
+  {
+    moveMagHolder();
+  }
 }

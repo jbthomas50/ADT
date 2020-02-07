@@ -1,6 +1,6 @@
-#define RX 0
-#define TX 1
-#define SEND_START 8
+const int RX = 0;
+const int TX = 1;
+const int SEND_START = 8;
 
 const int START_FRAME = 0xDEAD;
 const int END_FRAME = 0x5AFE;
@@ -12,9 +12,9 @@ byte vertical[4];
 template <class t>
 uint8_t* serialize(t *data)
 {
-    uint8_t *serialData = new uint8_t [sizeof(t)];
-    memcpy((void *)serialData, (void*)data, sizeof(t));
-    return serialData;
+  uint8_t *serialData = new uint8_t [sizeof(t)];
+  memcpy((void *)serialData, (void*)data, sizeof(t));
+  return serialData;
 }
 
 
@@ -50,5 +50,5 @@ void loop() {
   delay(1000);
   fire = !fire;
 
-  delay(10000);
+  delay(50000);
 }
