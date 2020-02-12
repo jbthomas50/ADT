@@ -112,8 +112,14 @@ void calibrate()
 void aim(gunCoords coords)
 {
   // determine how many degrees away we are
-  float horizontalDegrees = coords.horizontal - previousCoords.horizontal;
-  float verticalDegrees = coords.vertical - previousCoords.vertical;
+  // choose the way that is shorter
+  float right = coords.horizontal - previousCoords.horizontal;
+  float left = previousCoords.horizontal - coords.horizontal;
+  float horizontalDegrees = abs(right) < abs(left) ? right : left;
+  // this is very important to get right since we don't have a full 360 degree turn. We can't go too far either way.
+  float up = coords.vertical - previousCoords.vertical;
+  float down = previousCoords.vertical - coords.vertical;
+  float verticalDegrees = abs(up) < abs(down) ? up : down;
   
   // determine how many steps to take
   int horizontalSteps = STEP_PER_DEG * horizontalDegrees;
