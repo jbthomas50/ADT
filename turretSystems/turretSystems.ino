@@ -5,41 +5,53 @@
 #include <Stepper.h>
 #include <Servo.h>
 #include <avr/sleep.h>
+
+#define ENSURE_FIRE
+#define DEBUG
 // Define number of steps per rotation:
 const int stepsPerRevolution = 2048;
 
 /*********** PINS *************/
 // UART
-const int RX = 0;
-const int TX = 1;
+const int TX = 14;
+const int RX = 15;
+
+// INTERRUPTS
 // communication interrupt
 const int COMMUNICATION_INTERRUPT = 2;
 // save pin 3 for possible future interrupt
 const int FIRE_FEEDBACK = 3; // if we choose to detect a misfire
-// Z axis motor
-const int Z_IN1 = 4;
-const int Z_IN2 = 5;
-const int Z_IN3 = 6;
-const int Z_IN4 = 7;
-// firing pin
-const int FIRING_PIN = 8;
-// enable for the motor to move the mag holder
-const int MOTOR_ENABLE = 9;
-// XY axis motor
-const int XY_IN1 = 10;
-const int XY_IN2 = 11;
-const int XY_IN3 = 12;
-const int XY_IN4 = 13;
 
+// PWM
+// firing pin
+const int FIRING_PIN = 5;
+// enable for the motor to move the mag holder
+const int MOTOR_ENABLE = 7;
 // firing motor. Only need one pin since it only goes one way
-const int SPIN_UP = A0;
+const int SPIN_UP = 8;
+
+// DIGITAL PINS
+// XY axis motor
+const int XY_IN1 = 44;
+const int XY_IN2 = 45;
+const int XY_IN3 = 46;
+const int XY_IN4 = 47;
+
+// Z axis motor
+const int Z_IN1 = 50;
+const int Z_IN2 = 51;
+const int Z_IN3 = 52;
+const int Z_IN4 = 53;
+
 // motor control for the mag holder. Need more pins because this one spins two ways
-const int MAG_MOVER = A1;
-const int MAG_RESET = A2;
+const int MAG_MOVER = 40;
+const int MAG_RESET = 41;
+
 // signals when to stop moving the mag holder
-const int MAG_POSITION = A3;
-const int HORIZONTAL_CALIBRATION = A4;
-const int VERTICAL_CALIBRATION = A5;
+const int MAG_POSITION = 35;
+
+const int HORIZONTAL_CALIBRATION = 36;
+const int VERTICAL_CALIBRATION = 37;
 
 /***************** END OF PINS*********************/
 
@@ -81,6 +93,7 @@ void wakeupISR(void* param)
   sleep_disable();
 }
 
+#ifdef ENSURE_FIRE
 /********************************************
  * ISR to ensure dart firing.
  ********************************************/
@@ -88,6 +101,7 @@ void dartFired(void* param)
 {
   fired = true;
 }
+#endif
 
 /********************************************
  * Initial calibration
@@ -116,6 +130,7 @@ void aim(gunCoords coords)
   float right = coords.horizontal - previousCoords.horizontal;
   float left = previousCoords.horizontal - coords.horizontal;
   float horizontalDegrees = abs(right) < abs(left) ? right : left;
+  
   // this is very important to get right since we don't have a full 360 degree turn. We can't go too far either way.
   float up = coords.vertical - previousCoords.vertical;
   float down = previousCoords.vertical - coords.vertical;
@@ -152,7 +167,8 @@ void fireOrIntimidate(bool fire, int numDarts = 1)
       }
       firingPin.write(0);
       delay(200);
-      
+
+#ifdef ENSURE_FIRE
       if (fired == false)
       {
         // set i back one to retry firing
@@ -162,6 +178,9 @@ void fireOrIntimidate(bool fire, int numDarts = 1)
       {
         numDartsFired++;
       }
+#else
+      numDartsFired++;
+#endif
     }
   }
 }
@@ -238,8 +257,8 @@ t deserialize(uint8_t *serialData)
  *******************************************************************************************************/
 bool getStartFrame()
 {
-  Serial.read();
-  Serial.read();
+  Serial3.read();
+  Serial3.read();
   return true;
 }
 
@@ -249,9 +268,9 @@ bool getStartFrame()
  *****************************************************************/
 void getEndFrame()
 {
-  while (Serial.available())
+  while (Serial3.available())
   {
-    Serial.read();
+    Serial3.read();
   }
 }
 
@@ -261,21 +280,21 @@ void getEndFrame()
 bool getInput(serializedGunCoords & ser_coords)
 {
   bool fire = false;
-  while (!Serial.available()){}
+  while (!Serial3.available()){}
   if(getStartFrame())
   {
   // Horizontal angle
-  ser_coords.horizontal[0] = Serial.read();
-  ser_coords.horizontal[1] = Serial.read();
-  ser_coords.horizontal[2] = Serial.read();
-  ser_coords.horizontal[3] = Serial.read();
+  ser_coords.horizontal[0] = Serial3.read();
+  ser_coords.horizontal[1] = Serial3.read();
+  ser_coords.horizontal[2] = Serial3.read();
+  ser_coords.horizontal[3] = Serial3.read();
   // vertical angle
-  ser_coords.vertical[0] = Serial.read();
-  ser_coords.vertical[1] = Serial.read();
-  ser_coords.vertical[2] = Serial.read();
-  ser_coords.vertical[3] = Serial.read();
+  ser_coords.vertical[0] = Serial3.read();
+  ser_coords.vertical[1] = Serial3.read();
+  ser_coords.vertical[2] = Serial3.read();
+  ser_coords.vertical[3] = Serial3.read();
   // fire or no fire
-  fire = Serial.read();
+  fire = Serial3.read();
   // do we want to send # of darts?
   }
   getEndFrame();
@@ -285,7 +304,11 @@ bool getInput(serializedGunCoords & ser_coords)
 /********************************************************************************/
 void setup() 
 {
-  Serial.begin(9600); // we can probably make this faster
+#ifdef DEBUG
+  Serial.begin(9600);
+#endif
+  Serial3.begin(9600); // we can probably make this faster
+  while (!Serial) {}
   // Set the speed to 15 rpm:
   HorizontalStepper.setSpeed(15);
   VerticalStepper.setSpeed(15);
@@ -315,7 +338,9 @@ void setup()
 
   // interrupts
   attachInterrupt(digitalPinToInterrupt(COMMUNICATION_INTERRUPT), wakeupISR, RISING);
+#ifdef ENSURE_FIRE
   attachInterrupt(digitalPinToInterrupt(FIRE_FEEDBACK), dartFired, RISING);
+#endif
 
   spinning = false;
   numDartsFired = 0;
@@ -332,7 +357,11 @@ void loop()
   sleep_enable();
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   sleep_cpu();
+  
+#ifdef DEBUG
   Serial.println("I'm awake!");
+#endif
+  
   serializedGunCoords ser_coords;
   bool fire = getInput(ser_coords);
 
