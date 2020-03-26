@@ -36,7 +36,7 @@ void loop() {
   uint8_t * endFrame = serialize(&END_FRAME);
 
   digitalWrite(SEND_START, HIGH);
-  delay(50);
+  delay(100);
   digitalWrite(SEND_START, LOW);
   // start frame
   Serial.write(startFrame, 2);
@@ -46,9 +46,9 @@ void loop() {
   Serial.write(fire);
   // end frame
   Serial.write(endFrame, 2);
-  
+  Serial.flush();
   delay(1000);
   fire = !fire;
 
-  delay(50000);
+  delay(10000);
 }

@@ -25,6 +25,7 @@ int numDartsFired;
 int numMagsUsed;
 bool magsLoaded;
 
+volatile bool joystickControl;
 volatile bool fired;
 
 /*********** PINS *************/
@@ -33,6 +34,7 @@ const int TX = 14;
 const int RX = 15;
 
 // INTERRUPTS
+const int JOYSTICK_SWITCH = 2;
 // save pin 3 for possible future interrupt
 const int FIRE_FEEDBACK = 3; // if we choose to detect a misfire
 // interrupt for when reloading mags is finished -- also used for power down
@@ -45,6 +47,10 @@ const int COMMUNICATION_INTERRUPT = 19;
 const int SPIN_UP = 8;
 
 // DIGITAL PINS
+
+// joystick button for firing
+const int FIRE = 10;
+
 // signals when to stop moving the mag holder
 const int MAG_POSITION = 35;
 
@@ -71,6 +77,11 @@ const int HORIZONTAL_STEP = 51;
 // Vertical motor
 const int VERTICAL_DIRECTION = 52;
 const int VERTICAL_STEP = 53;
+
+// Analog pins
+const int XAXIS = A0;
+const int YAXIS = A1;
+
 /***************** END OF PINS*********************/
 
 // Create stepper objects, note the pin order: 1 3 2 4
@@ -95,6 +106,14 @@ struct gunCoords
 void wakeupISR(void* param)
 {
   sleep_disable();
+}
+
+/***************************************************************
+ * ISR to toggle between facial recognition and joystick modes
+ **************************************************************/
+void toggleMode(void* param)
+{
+  joystickControl = !joystickControl;
 }
 
 #ifdef POWER_DOWN
@@ -263,67 +282,6 @@ void SpinDown()
   digitalWrite(SPIN_UP, LOW);
 }
 
-/***************************************************************
- * Serial input is read in bytes, so we have to deserialize it
- **************************************************************/
-template <class t>
-t deserialize(uint8_t *serialData)
-{
-  t data;
-  memcpy(&data, (void*)serialData, sizeof(t));
-  return data;
-}
-
-/*******************************************************************************************************
- * get the start frame. make sure we are syncing up with the sender so we recieve correct information
- * TODO: check for correct data in start frame before starting the rest of the recieve process.
- *******************************************************************************************************/
-bool getStartFrame()
-{
-  Serial3.read();
-  Serial3.read();
-  return true;
-}
-
-/******************************************************************
- * empty the buffer
- * TODO: check for end frameto ensure data is received correctly
- *****************************************************************/
-void getEndFrame()
-{
-  while (Serial3.available())
-  {
-    Serial3.read();
-  }
-}
-
-/********************************************************
- * Get the coordinates and the command to fire or not
- *******************************************************/
-bool getInput(serializedGunCoords & ser_coords)
-{
-  bool fire = false;
-  while (!Serial3.available()){}
-  if(getStartFrame())
-  {
-  // Horizontal angle
-  ser_coords.horizontal[0] = Serial3.read();
-  ser_coords.horizontal[1] = Serial3.read();
-  ser_coords.horizontal[2] = Serial3.read();
-  ser_coords.horizontal[3] = Serial3.read();
-  // vertical angle
-  ser_coords.vertical[0] = Serial3.read();
-  ser_coords.vertical[1] = Serial3.read();
-  ser_coords.vertical[2] = Serial3.read();
-  ser_coords.vertical[3] = Serial3.read();
-  // fire or no fire
-  fire = Serial3.read();
-  // do we want to send # of darts?
-  }
-  getEndFrame();
-  return fire;
-}
-
 /********************************************************
  * Sleep while nothing happening
  *******************************************************/
@@ -348,7 +306,7 @@ void sleep(int interruptPin)
 }
 
 /******************************************************************************
- *
+ * setup for all modes
  ******************************************************************************/
 void setup() 
 {
@@ -395,6 +353,10 @@ void setup()
   pinMode(FIRE_FEEDBACK, INPUT);
   pinMode(MAG_POSITION, INPUT_PULLUP);
   pinMode(RELOAD_N_POWER_DOWN, INPUT);
+  pinMode(JOYSTICK_SWITCH, INPUT);
+  pinMode(XAXIS, INPUT);
+  pinMode(YAXIS, INPUT);
+  pinMode(FIRE, INPUT);
 
 #ifdef DEBUG
   Serial.println("initialized inputs");
@@ -407,12 +369,14 @@ void setup()
 #endif
 
   magsLoaded = false;
+  joystickControl = false;
 
 #ifdef DEBUG
   Serial.println("attaching interrupts");
 #endif
 
   // interrupts
+  attachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH), toggleMode, RISING);
 #ifdef ENSURE_FIRE
   attachInterrupt(digitalPinToInterrupt(FIRE_FEEDBACK), dartFired, RISING);
 #endif
@@ -425,35 +389,52 @@ void setup()
 #endif
 }
 
-/**************************************************************************
- *
- *************************************************************************/
-void loop()
-{
+/*******************************************************
+ * loop for all modes
+ ******************************************************/
+void loop() {
   if (!magsLoaded)
   {
+    // detach all interrupts so we don't accidentally wake up before wanted
 #ifdef POWER_DOWN
-  detachInterrupt(digitalPinToInterrupt(RELOAD_N_POWER_DOWN));
+    detachInterrupt(digitalPinToInterrupt(RELOAD_N_POWER_DOWN));
 #endif
+#ifdef ENSURE_FIRE
+    detachInterrupt(digitalPinToInterrupt(FIRE_FEEDBACK));
+#endif
+    detachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH));
+  
+    Serial3.write(NOT_READY); // send a code back to wait while waiting for load
+    // sleep until reloaded
+    sleep(RELOAD_N_POWER_DOWN);
 
-  Serial3.write(NOT_READY); // send a code back to wait while waiting for load
-  sleep(RELOAD_N_POWER_DOWN);
-  resetMagHolder();
-  Serial3.write(READY); // send code to begin aiming
-  
+    //re-attach all interrupts now that we're awake
 #ifdef POWER_DOWN
-  attachInterrupt(digitalPinToInterrupt(RELOAD_N_POWER_DOWN), powerDown, RISING);
+    attachInterrupt(digitalPinToInterrupt(RELOAD_N_POWER_DOWN), powerDown, RISING);
 #endif
+#ifdef ENSURE_FIRE
+    attachInterrupt(digitalPinToInterrupt(FIRE_FEEDBACK), dartFired, RISING);
+#endif
+    attachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH), toggleMode, RISING);
+
+    // reset the mag holder to the first mag
+    resetMagHolder();
   }
-  
-  sleep(COMMUNICATION_INTERRUPT);
-  Serial.println("getting serial input");
-  serializedGunCoords ser_coords;
-  bool fire = getInput(ser_coords);
-  
+
+  // only do one of the modes. Can't do both at once.
+  // This gives a "free hand" option of using a joystick to
+  // fire the darts wherever it is desired.
   gunCoords coords;
-  coords.horizontal = deserialize<float>(ser_coords.horizontal);
-  coords.vertical = deserialize<float>(ser_coords.vertical);
+  bool fire;
+  if (joystickControl)
+  {
+    fire = joystickLoop(coords);
+  }
+  else
+  {
+    fire = faceLoop(coords);
+  }
+
   
   if (fire)
   {
@@ -463,7 +444,7 @@ void loop()
   if (fire)
   {
     fireDart();
-    SpinDown();    
+    SpinDown();
   }
   
   // change mag if needed
