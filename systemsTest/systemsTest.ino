@@ -216,29 +216,29 @@ void setup()
 
 
 void loop() {
-  // move 45 degrees
+  // move 45 degrees without firing
   gunCoords coords;
   coords.horizontal = 45;
   coords.vertical = 0;
   fireSequence(false, coords);
 
-  // move back 45 degrees
+  // move back 45 degrees and fire
   coords.horizontal = -45;
   fireSequence(true, coords);
   moveMagHolder();
 
-  // move up 15 degrees
+  // move up 15 degrees and fire
   coords.horizontal = 0;
   coords.vertical = 15;
   fireSequence(true, coords);
   moveMagHolder();
 
-  // move back down 15 degrees
+  // move back down 15 degrees and fire
   coords.vertical = -15;
   fireSequence(true, coords);
   moveMagHolder();
 
-  // stay put
+  // stay put and fire
   coords.vertical = 0;
   fireSequence(true, coords);
   moveMagHolder();
