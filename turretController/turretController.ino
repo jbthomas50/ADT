@@ -3,7 +3,7 @@
 #include <avr/sleep.h>
 
 //#define ENSURE_FIRE
-//#define POWER_DOWN // this feature still needs some work
+#define POWER_DOWN // this feature still needs some work
 #define DEBUG
 // Define number of steps per rotation for small steppers:
 const int stepsPerRevolution = 2048;
@@ -34,11 +34,11 @@ const int TX = 14;
 const int RX = 15;
 
 // INTERRUPTS
-const int JOYSTICK_SWITCH = 2;
+const int JOYSTICK_SWITCH = 18;
 // save pin 3 for possible future interrupt
 const int FIRE_FEEDBACK = 3; // if we choose to detect a misfire
 // interrupt for when reloading mags is finished -- also used for power down
-const int RELOAD_N_POWER_DOWN = 18;
+const int RELOAD_N_POWER_DOWN = 2;
 // communication interrupt
 const int COMMUNICATION_INTERRUPT = 19;
 
@@ -52,11 +52,11 @@ const int SPIN_UP = 8;
 const int FIRE = 10;
 
 // signals when to stop moving the mag holder
-const int MAG_POSITION = 35;
+const int MAG_POSITION = 16;
 
-// stop pins for the two vertical ends
-const int VERTICAL_TOP = 36;
-const int VERTICAL_BOTTOM = 37;
+// limit switch for the two vertical ends
+const int VERTICAL_TOP = 52;
+const int VERTICAL_BOTTOM = 53;
 
 // firing pin
 const int FIRING_PIN1 = 38;
@@ -65,18 +65,18 @@ const int FIRING_PIN3 = 40;
 const int FIRING_PIN4 = 41;
 
 // Mag motor
-const int MAG_STEPPER1 = 44;
-const int MAG_STEPPER2 = 45;
-const int MAG_STEPPER3 = 46;
-const int MAG_STEPPER4 = 47;
+const int MAG_STEPPER1 = 42;
+const int MAG_STEPPER2 = 43;
+const int MAG_STEPPER3 = 44;
+const int MAG_STEPPER4 = 45;
 
 // Horizontal motor
-const int HORIZONTAL_DIRECTION = 50;
-const int HORIZONTAL_STEP = 51;
+const int HORIZONTAL_DIRECTION = 24;
+const int HORIZONTAL_STEP = 25;
 
 // Vertical motor
-const int VERTICAL_DIRECTION = 52;
-const int VERTICAL_STEP = 53;
+const int VERTICAL_DIRECTION = 22;
+const int VERTICAL_STEP = 23;
 
 // Analog pins
 const int XAXIS = A0;
@@ -221,6 +221,25 @@ void fireDart(int numDarts = 1)
   }
 }
 
+
+/********************************************************
+ * Sleep while nothing happening
+ *******************************************************/
+void fireSequence(bool fire, gunCoords coords)
+{
+  if (fire)
+  {
+    SpinUp();
+  }
+  aim(coords);
+  if (fire)
+  {
+    fireDart();
+    SpinDown();
+  }
+}
+
+
 /***************************************************
  * Move the mag. Detect whether at the end or not.
  **************************************************/
@@ -317,8 +336,8 @@ void setup()
   while (!Serial) {}
 #endif
   // Set the speed to 13rpm:
-  MagStepper.setSpeed(13);
-  FiringPin.setSpeed(13);
+  MagStepper.setSpeed(5);
+  FiringPin.setSpeed(3);
 
 #ifdef DEBUG
   Serial.println("started stepper motors");
@@ -352,11 +371,11 @@ void setup()
   pinMode(VERTICAL_BOTTOM, INPUT_PULLUP);
   pinMode(FIRE_FEEDBACK, INPUT);
   pinMode(MAG_POSITION, INPUT_PULLUP);
-  pinMode(RELOAD_N_POWER_DOWN, INPUT);
-  pinMode(JOYSTICK_SWITCH, INPUT);
+  pinMode(RELOAD_N_POWER_DOWN, INPUT_PULLUP);
+  pinMode(JOYSTICK_SWITCH, INPUT_PULLUP);
   pinMode(XAXIS, INPUT);
   pinMode(YAXIS, INPUT);
-  pinMode(FIRE, INPUT);
+  pinMode(FIRE, INPUT_PULLUP);
 
 #ifdef DEBUG
   Serial.println("initialized inputs");
@@ -368,7 +387,7 @@ void setup()
   Serial.println("initialized inputs");
 #endif
 
-  magsLoaded = false;
+  magsLoaded = true;
   joystickControl = false;
 
 #ifdef DEBUG
@@ -424,28 +443,18 @@ void loop() {
   // only do one of the modes. Can't do both at once.
   // This gives a "free hand" option of using a joystick to
   // fire the darts wherever it is desired.
-  gunCoords coords;
+  gunCoords coords;w
   bool fire;
-  if (joystickControl)
-  {
+//  if (joystickControl)
+//  {
     fire = joystickLoop(coords);
-  }
-  else
-  {
-    fire = faceLoop(coords);
-  }
+//  }
+//  else
+//  {
+//    fire = faceLoop(coords);
+//  }
 
-  
-  if (fire)
-  {
-    SpinUp();
-  }
-  aim(coords);
-  if (fire)
-  {
-    fireDart();
-    SpinDown();
-  }
+  fireSequence(fire, coords);
   
   // change mag if needed
   if (numDartsFired == DARTS_PER_MAG)
