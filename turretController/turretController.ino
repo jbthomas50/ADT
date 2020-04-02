@@ -34,7 +34,7 @@ const int TX = 14;
 const int RX = 15;
 
 // INTERRUPTS
-const int JOYSTICK_SWITCH = 18;
+//const int JOYSTICK_SWITCH = 18;
 // save pin 3 for possible future interrupt
 const int FIRE_FEEDBACK = 3; // if we choose to detect a misfire
 // interrupt for when reloading mags is finished -- also used for power down
@@ -176,8 +176,8 @@ void stepMultiple(int pin, int steps, int checkPin = 0)
  **************************************************/
 void aim(gunCoords coords)
 {
-  int horizontalDirection = coords.horizontal < 0 ? LOW : HIGH;
-  int verticalDirection = coords.vertical < 0 ? LOW : HIGH;
+  int horizontalDirection = coords.horizontal < 0 ? HIGH : LOW;
+  int verticalDirection = coords.vertical < 0 ? HIGH : LOW;
   int checkPin = verticalDirection == LOW ? VERTICAL_BOTTOM : VERTICAL_TOP;
 
   // determine how many steps to take
@@ -372,7 +372,7 @@ void setup()
   pinMode(FIRE_FEEDBACK, INPUT);
   pinMode(MAG_POSITION, INPUT_PULLUP);
   pinMode(RELOAD_N_POWER_DOWN, INPUT_PULLUP);
-  pinMode(JOYSTICK_SWITCH, INPUT_PULLUP);
+//  pinMode(JOYSTICK_SWITCH, INPUT_PULLUP);
   pinMode(XAXIS, INPUT);
   pinMode(YAXIS, INPUT);
   pinMode(FIRE, INPUT_PULLUP);
@@ -395,7 +395,7 @@ void setup()
 #endif
 
   // interrupts
-  attachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH), toggleMode, RISING);
+//  attachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH), toggleMode, RISING);
 #ifdef ENSURE_FIRE
   attachInterrupt(digitalPinToInterrupt(FIRE_FEEDBACK), dartFired, RISING);
 #endif
@@ -421,7 +421,7 @@ void loop() {
 #ifdef ENSURE_FIRE
     detachInterrupt(digitalPinToInterrupt(FIRE_FEEDBACK));
 #endif
-    detachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH));
+//    detachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH));
   
     Serial3.write(NOT_READY); // send a code back to wait while waiting for load
     // sleep until reloaded
@@ -434,7 +434,7 @@ void loop() {
 #ifdef ENSURE_FIRE
     attachInterrupt(digitalPinToInterrupt(FIRE_FEEDBACK), dartFired, RISING);
 #endif
-    attachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH), toggleMode, RISING);
+//    attachInterrupt(digitalPinToInterrupt(JOYSTICK_SWITCH), toggleMode, RISING);
 
     // reset the mag holder to the first mag
     resetMagHolder();
@@ -443,15 +443,15 @@ void loop() {
   // only do one of the modes. Can't do both at once.
   // This gives a "free hand" option of using a joystick to
   // fire the darts wherever it is desired.
-  gunCoords coords;w
+  gunCoords coords;
   bool fire;
 //  if (joystickControl)
 //  {
-    fire = joystickLoop(coords);
+//    fire = joystickLoop(coords);
 //  }
 //  else
 //  {
-//    fire = faceLoop(coords);
+    fire = faceLoop(coords);
 //  }
 
   fireSequence(fire, coords);
