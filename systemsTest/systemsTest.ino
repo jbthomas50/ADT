@@ -22,24 +22,24 @@ const int VERTICAL_TOP = 52;
 const int VERTICAL_BOTTOM = 53;
 
 // firing pin
-const int FIRING_PIN1 = 38;
-const int FIRING_PIN2 = 39;
+const int FIRING_PIN1 = 39;
+const int FIRING_PIN2 = 38;
 const int FIRING_PIN3 = 40;
 const int FIRING_PIN4 = 41;
 
 // Mag motor
-const int MAG_STEPPER1 = 42;
-const int MAG_STEPPER2 = 43;
+const int MAG_STEPPER1 = 43;
+const int MAG_STEPPER2 = 42;
 const int MAG_STEPPER3 = 44;
 const int MAG_STEPPER4 = 45;
 
 // Horizontal motor
-const int HORIZONTAL_DIRECTION = 24;
-const int HORIZONTAL_STEP = 25;
+const int HORIZONTAL_DIRECTION = 22;
+const int HORIZONTAL_STEP = 23;
 
 // Vertical motor
-const int VERTICAL_DIRECTION = 22;
-const int VERTICAL_STEP = 23;
+const int VERTICAL_DIRECTION = 24;
+const int VERTICAL_STEP = 25;
 
 // Create stepper objects, note the pin order: 1 3 2 4
 Stepper MagStepper = Stepper(stepsPerRevolution, MAG_STEPPER1, MAG_STEPPER3, MAG_STEPPER2, MAG_STEPPER4);
@@ -85,8 +85,8 @@ void stepMultiple(int pin, int steps, int checkPin = 0)
  **************************************************/
 void aim(gunCoords coords)
 {
-  int horizontalDirection = coords.horizontal < 0 ? LOW : HIGH;
-  int verticalDirection = coords.vertical < 0 ? LOW : HIGH;
+  int horizontalDirection = coords.horizontal < 0 ? HIGH : LOW;
+  int verticalDirection = coords.vertical < 0 ? HIGH : LOW;
   int checkPin = verticalDirection == LOW ? VERTICAL_BOTTOM : VERTICAL_TOP;
 
   // determine how many steps to take
@@ -218,35 +218,40 @@ void setup()
 void loop() {
   // move 45 degrees without firing
   gunCoords coords;
-  coords.horizontal = 45;
+  coords.horizontal = 45.0;
   coords.vertical = 0;
   fireSequence(false, coords);
 
   // move back 45 degrees and fire
-  coords.horizontal = -45;
-  fireSequence(true, coords);
-  moveMagHolder();
+  coords.horizontal = -45.0;
+  fireSequence(false, coords);
+//  moveMagHolder();
+//
 
-  // move up 15 degrees and fire
+  delay(2000);
+
+//  // move up 15 degrees and fire
   coords.horizontal = 0;
-  coords.vertical = 15;
-  fireSequence(true, coords);
-  moveMagHolder();
-
-  // move back down 15 degrees and fire
-  coords.vertical = -15;
-  fireSequence(true, coords);
-  moveMagHolder();
+  coords.vertical = 20;
+  fireSequence(false, coords);
+//  moveMagHolder();
+//
+//  // move back down 15 degrees and fire
+  coords.vertical = -20;
+  fireSequence(false, coords);
+//
+  delay(2000); 
 
   // stay put and fire
-  coords.vertical = 0;
-  fireSequence(true, coords);
-  moveMagHolder();
-
-  // reset mag holder
-  resetMagHolder();
+//  coords.vertical = 0;
+//  fireSequence(true, coords);
+//  delay(2000);
+//  moveMagHolder();
+//
+//  // reset mag holder
+//  resetMagHolder();
 
   // delay 10 seconds
-  delay(10000);
+  
   
 }
