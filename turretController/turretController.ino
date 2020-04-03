@@ -59,24 +59,24 @@ const int VERTICAL_TOP = 52;
 const int VERTICAL_BOTTOM = 53;
 
 // firing pin
-const int FIRING_PIN1 = 38;
-const int FIRING_PIN2 = 39;
+const int FIRING_PIN1 = 39;
+const int FIRING_PIN2 = 38;
 const int FIRING_PIN3 = 40;
 const int FIRING_PIN4 = 41;
 
 // Mag motor
-const int MAG_STEPPER1 = 42;
-const int MAG_STEPPER2 = 43;
+const int MAG_STEPPER1 = 43;
+const int MAG_STEPPER2 = 42;
 const int MAG_STEPPER3 = 44;
 const int MAG_STEPPER4 = 45;
 
 // Horizontal motor
-const int HORIZONTAL_DIRECTION = 24;
-const int HORIZONTAL_STEP = 25;
+const int HORIZONTAL_DIRECTION = 22;
+const int HORIZONTAL_STEP = 23;
 
 // Vertical motor
-const int VERTICAL_DIRECTION = 22;
-const int VERTICAL_STEP = 23;
+const int VERTICAL_DIRECTION = 24;
+const int VERTICAL_STEP = 25;
 
 // Analog pins
 const int XAXIS = A0;
